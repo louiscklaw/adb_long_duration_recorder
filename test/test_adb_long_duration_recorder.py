@@ -159,16 +159,21 @@ class Test_topic(unittest.TestCase):
 
         return process_found
 
+    def assert_pid_is_valid(self, pid):
+        '''try to check if the pid is the valid one'''
+        self.assertGreater(pid, 1, 'the pid is lower than 1')
+        self.assertTrue(self.find_process_by_pid(pid),'the process cannot found under host process table')
 
-    def test_adb_start_record(self, duration=99, UDID=TestSetting.ANDROID_UDID, maximum_length=180):
+    def test_adb_start_record(self, duration=10, UDID=TestSetting.ANDROID_UDID, maximum_length=180):
         record_instance = self.test_create_instance(maximum_length=maximum_length)
-        record_instance.adb_start_record(duration)
+        record_instance.adb_start_record(30)
 
-        self.assertGreater(int(record_instance.record_pid), 1, 'the pid not valid')
+        # record_process_pid = record_instance.record_process.pid
+        # self.assertGreater(record_process_pid, 1, 'the pid not valid')
 
-        process_found = self.find_process_by_pid(record_instance.record_pid)
+        # process_found = self.find_process_by_pid(record_instance.record_process)
 
-        self.assertTrue(process_found, 'the record process not found {}'.format(record_instance.record_pid))
+        # self.assertTrue(process_found, 'the record process not found {}'.format(record_instance.record_process))
 
         # print(record_instance.record_files_android_path)
         # self.assertEqual('',dir(record_instance),'fail')
@@ -181,6 +186,8 @@ class Test_topic(unittest.TestCase):
         # result = subprocess.check_output(splitted_command)
 
         return record_instance
+
+
 
     def test_send_popen_command(self, command='hostname'):
         record_instance = self.test_create_instance()
@@ -202,15 +209,14 @@ class Test_topic(unittest.TestCase):
         record_instance= self.test_create_instance()
 
         record_instance.adb_start_record()
+        record_process_pid = record_instance.record_process.pid
 
-        process_found = self.find_process_by_pid(record_instance.record_pid)
-        self.assertTrue(process_found, 'the wanted record process not found {}'.format(record_instance.record_pid))
+        self.assert_pid_is_valid(record_process_pid)
 
         record_instance.adb_kill_record()
-        self.assertFalse(process_found, 'the record process still remains')
-
-
-
+        time.sleep(15)
+        process_found = self.find_process_by_pid(record_process_pid)
+        self.assertFalse(process_found, 'the record process still remains pid {}'.format(record_process_pid))
 
 
     def test_list_file_in_android(self):
@@ -257,7 +263,7 @@ class Test_topic(unittest.TestCase):
         }
         for duration, expected_command in TEST_SET.items():
             record_instance = self.test_create_instance(maximum_length=duration)
-            commands = record_instance._get_start_record_command()
+            commands = record_instance._get_start_record_command(duration,1)
 
             self.assertEqual(expected_command, commands, 'the generated command not match {}'.format(commands))
 

@@ -39,6 +39,7 @@ import subprocess
 import shlex
 import math
 import logging
+import time
 
 from pprint import pprint
 
@@ -107,11 +108,14 @@ class AdbLongDurationRecorder:
 
     def _send_popen_command(self, command, command_timeout=1):
         try:
+            command = 'export'
             splitted_command = shlex.split(command)
             p = subprocess.Popen(splitted_command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            outs, errs = p.communicate(timeout=command_timeout)
 
-            return outs, errs
+            outs, errs = p.communicate(timeout=command_timeout)
+            print(outs.decode('utf-8'))
+            assert False
+            return p
         except Exception as e:
             p.kill()
             raise e
@@ -134,11 +138,14 @@ class AdbLongDurationRecorder:
         record_files_android_path = ['{}/{}'.format(android_store_dir, record_filename) for record_filename in record_filenames]
         return record_files_android_path
 
-    def _get_start_record_command(self, repeat_times=1 ):
+    def _get_start_record_command(self, duration, repeat_times=1):
         # adb shell screenrecord /sdcard/example.mp4
         adb_command_head = self._get_adb_command_head()
         udid = self.udid
+
         time_limit = self.maximum_length
+        if repeat_times == 1:
+            time_limit= duration
 
         record_files_android_path = self._get_filename_in_android(repeat_times)
 
@@ -192,7 +199,7 @@ class AdbLongDurationRecorder:
 
         repeat = max_number_output
         if duration != -1:
-            int(math.ceil(duration / self.maximum_length))
+            repeat = int(math.ceil(duration / self.maximum_length))
         return repeat
 
     def list_process(self):
@@ -216,8 +223,10 @@ class AdbLongDurationRecorder:
     def _start_background_process(self, command):
         try:
             splitted_command = shlex.split(command)
-            p = subprocess.Popen(splitted_command, close_fds=True)
-            return p.pid
+            p = subprocess.Popen(splitted_command)
+            p.wait()
+
+            return p
         except Exception as e:
             raise e
 
@@ -231,10 +240,14 @@ class AdbLongDurationRecorder:
             time_limit=self.maximum_length
 
             repeat = self._count_repeat(duration)
-            command = self._get_start_record_command(repeat)
+            command = self._get_start_record_command(duration, repeat )
 
-            record_pid = self._start_background_process(command)
-            self.record_pid = record_pid
+            command = 'pwd'
+            # record_process = self._start_background_process(command)
+
+            record_process = self._send_popen_command(command)
+
+            self.record_process = record_process
 
             logging.info('test start done')
 
@@ -251,12 +264,10 @@ class AdbLongDurationRecorder:
         logging.debug('kill recording')
 
         try:
-            pid = self.record_pid
-
+            self.record_process.kill()
 
         except Exception as e:
             logging.error(ErrorText.ERROR_KILLING_RECORDING)
-            logging.debug('dump value kill_command: {}'.format(kill_command))
             raise e
 
     def adb_pull_record(self, record_file_to_pull):
