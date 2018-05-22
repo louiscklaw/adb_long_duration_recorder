@@ -57,6 +57,7 @@ class ErrorText:
     ERROR_PULLING_SCREEN_RECORD='error during pulling screen record'
     ERROR_GETTING_PULL_SCREEN_RECORD_COMMAND='error getting pull screen record command'
     ERROR_SENDING_SUBPROCESS_COMMAND='error sending command using popen'
+    ERROR_LISTING_PROCESS='error during list the process on host'
 
 class RunEnv:
     ADB_BIN_PATH=get_host_command_output('which adb')
@@ -84,11 +85,12 @@ class AdbLongDurationRecorder:
         self.local_store_dir = local_store_dir
         self.maximum_length = maximum_length
 
-    def _send_host_command(self, command, emitt_exception=False):
+    def _send_host_command(self, command, emitt_exception=False, use_shell=False):
         """accept string command, split it and feed to the subpeocess.check_output"""
         try:
             splitted_command = shlex.split(command)
-            result = subprocess.check_output(splitted_command)
+            result = subprocess.check_output(splitted_command, shell=use_shell)
+            result = result.decode('utf-8')
             return result
 
         except Exception as e:
@@ -175,6 +177,33 @@ class AdbLongDurationRecorder:
             int(math.ceil(duration / self.maximum_length))
         return repeat
 
+    def list_process(self):
+        try:
+            command_list_process = 'ps -ef'
+            result = self._send_host_command(command_list_process, use_shell=True)
+            return result
+        except Exception as e:
+            logging.error(ErrorText.ERROR_LISTING_PROCESS)
+            raise e
+
+
+    def list_file_in_android(self, to_list_dir='/sdcard', mask='*.mp4'):
+        target_file_mask = '/sdcard'
+        list_android_command = 'adb shell ls %s' % target_file_mask
+        splitted_command = shlex.split(list_android_command)
+        files = subprocess.check_output(splitted_command).decode('utf-8')
+
+        return files
+
+    def _start_background_process(self, command):
+        try:
+            splitted_command = shlex.split(command)
+            p = subprocess.Popen(splitted_command)
+            return p.pid
+        except Exception as e:
+            raise e
+
+
     def adb_start_record(self, duration=-1):
         """to start the recording
         Args:
@@ -186,8 +215,10 @@ class AdbLongDurationRecorder:
             repeat = self._count_repeat(duration)
             command = self._get_start_record_command(repeat)
 
-            splitted_command =  shlex.split(command)
-            result = subprocess.Popen(splitted_command)
+            record_pid = self._start_background_process(command)
+            self.record_pid = record_pid
+
+            logging.info('test start done')
 
         except Exception as e:
             raise e
