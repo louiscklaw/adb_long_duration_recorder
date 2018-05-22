@@ -84,16 +84,17 @@ class AdbLongDurationRecorder:
         self.local_store_dir = local_store_dir
         self.maximum_length = maximum_length
 
-    def _send_host_command(self, command):
+    def _send_host_command(self, command, emitt_exception=False):
         """accept string command, split it and feed to the subpeocess.check_output"""
         try:
             splitted_command = shlex.split(command)
             result = subprocess.check_output(splitted_command)
             return result
 
-        except expression as identifier:
+        except Exception as e:
             ErrorText.ERROR_SENDING_SUBPROCESS_COMMAND
-
+            if emitt_exception:
+                raise e
 
     def _get_record_filenames(self, repeat_times=1):
         return self.temp_record_filenames[0:repeat_times]
@@ -113,15 +114,20 @@ class AdbLongDurationRecorder:
         record_files_android_path = ['{}/{}'.format(android_store_dir, record_filename) for record_filename in record_filenames]
         return record_files_android_path
 
-    def _get_start_record_command(self, repeat_times=1):
+    def _get_start_record_command(self, repeat_times=1 ):
         # adb shell screenrecord /sdcard/example.mp4
         adb_command_head = self._get_adb_command_head()
         udid = self.udid
+        time_limit = self.maximum_length
+
         record_files_android_path = self._get_filename_in_android(repeat_times)
 
-        commands = ' & '.join(['{} shell screenrecord {}'.format(adb_command_head, record_file) for record_file in record_files_android_path])
+        # adb shell screenrecord --time-limit <TIME>
+        commands = ' & '.join(['{} shell screenrecord --time-limit {} {}'.format(adb_command_head, time_limit,record_file) for record_file in record_files_android_path])
 
         self.record_files_android_path = record_files_android_path
+
+
         return commands
 
     def _get_rm_record_command(self):
@@ -163,9 +169,9 @@ class AdbLongDurationRecorder:
         return pid
 
     def _count_repeat(self, duration, max_number_output =999):
-        if duration == -1:
-            repeat = max_number_output
-        else:
+
+        repeat = max_number_output
+        if duration != -1:
             int(math.ceil(duration / self.maximum_length))
         return repeat
 
@@ -175,15 +181,16 @@ class AdbLongDurationRecorder:
             duration: the duration of recording , -1 for very long
         """
         try:
+            time_limit=self.maximum_length
+
             repeat = self._count_repeat(duration)
             command = self._get_start_record_command(repeat)
 
             splitted_command =  shlex.split(command)
-            result = subprocess.Popen(splitted_command).decode('utf-8').strip()
-
+            result = subprocess.Popen(splitted_command)
 
         except Exception as e:
-            pass
+            raise e
 
         return self
 
@@ -197,34 +204,37 @@ class AdbLongDurationRecorder:
             result = subprocess.check_output(command)
 
         except Exception as e:
-            pass
+            raise e
 
     def adb_pull_record(self, record_file_to_pull):
         try:
             command = self._get_pull_command(record_file_to_pull)
             self._send_host_command(command)
         except Exception as e:
-            pass
+            raise e
         return self
 
     def adb_pull_records(self):
         local_store_dir = self.local_store_dir
         record_files_android_paths = self.record_files_android_path
 
-        # self.actual_record_pulled=[]
-        # try:
-        #     for record_files_android_path in record_files_android_paths:
-        #         self.adb_pull_record(record_files_android_path)
-        #         self.actual_record_pulled.append(record_files_android_path)
+        self.actual_record_pulled=[]
+        try:
+            for record_files_android_path in record_files_android_paths:
+                self.adb_pull_record(record_files_android_path)
+                self.actual_record_pulled.append(record_files_android_path)
 
-        # except Exception as e:
-        #     logging.error(ErrorText.ERROR_PULLING_SCREEN_RECORD)
-        # return self
+        except Exception as e:
+            logging.error(ErrorText.ERROR_PULLING_SCREEN_RECORD)
+            raise e
+
+        return self
 
     def adb_rm_record(self):
         android_store_dir = self.android_store_dir
         command = self._get_rm_record_command()
         result = self._send_host_command(command)
+
         return self
 
     def combine_record(self):

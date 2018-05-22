@@ -22,6 +22,8 @@ import logging
 import fnmatch
 import unittest
 
+from pprint import pprint
+
 from src.adb_long_duration_recorder import *
 
 class StatusText(object):
@@ -77,6 +79,7 @@ class Test_topic(unittest.TestCase):
                     match_files.append(os.path.join(dir_path, filename))
             # list the current directory only
             break
+
         return match_files
 
 
@@ -141,12 +144,11 @@ class Test_topic(unittest.TestCase):
     def test_adb_start_record(self, duration=-1, UDID=TestSetting.ANDROID_UDID, maximum_length=180):
         record_instance = self.test_create_instance(maximum_length=maximum_length)
         record_instance.adb_start_record(duration)
-        time.sleep(3)
 
-        print(record_instance.record_files_android_path)
+        # print(record_instance.record_files_android_path)
         # self.assertEqual('',dir(record_instance),'fail')
 
-        self.assertIn('/sdcard/temp_record_0.mp4', record_instance.record_files_android_path, 'fail ')
+        self.assertIn('/sdcard/temp_record_0.mp4', record_instance.record_files_android_path, 'fail')
 
         return record_instance
 
@@ -167,21 +169,45 @@ class Test_topic(unittest.TestCase):
 
         self.assertEqual(file_in_tmp_dir, [test_file], 'the target file not found')
 
-    def test_adb_pull_records(self):
+    # def test_adb_pull_record(self, duration=180, mp4_epxected, maximum_duration=2):
+    #     record_instance = self.test_adb_start_record(duration, maximum_duration=maximum_duration)
+
+    #     time.sleep(duration)
+
+    def test_get_start_record_command(self):
+        TEST_SET={
+            0: '/usr/bin/adb -s VZHGLMA742802935 shell screenrecord --time-limit 0 /sdcard/temp_record_0.mp4',
+            1: '/usr/bin/adb -s VZHGLMA742802935 shell screenrecord --time-limit 1 /sdcard/temp_record_0.mp4',
+            180: '/usr/bin/adb -s VZHGLMA742802935 shell screenrecord --time-limit 180 /sdcard/temp_record_0.mp4',
+            181:'/usr/bin/adb -s VZHGLMA742802935 shell screenrecord --time-limit 181 /sdcard/temp_record_0.mp4',
+        }
+        for duration, expected_command in TEST_SET.items():
+            record_instance = self.test_create_instance(maximum_length=duration)
+            commands = record_instance._get_start_record_command()
+
+            self.assertEqual(expected_command, commands, 'the generated command not match {}'.format(commands))
+
+    def test_get_adb_command_head(self):
+        record_instance = self.test_create_instance()
+        result = record_instance._get_adb_command_head()
+
+        self.assertEqual('/usr/bin/adb -s {}'.format(TestSetting.ANDROID_UDID), result, 'the generated command not match')
+
+
+    def t1est_adb_pull_records(self):
         TEST_SET = {
-            3: ['/tmp/temp_record_0.mp4'],
+            1: ['/tmp/temp_record_0.mp4' ],
+            3: ['/tmp/temp_record_0.mp4', '/tmp/temp_record_1.mp4'],
 
         }
         for record_test_duration, filenames in TEST_SET.items():
-            record_instance = self.test_adb_start_record(record_test_duration)
-            self.assertEqual('123', record_instance.record_files_android_path,'false ')
-
+            record_instance = self.test_adb_start_record(record_test_duration, maximum_length=2)
             time.sleep(record_test_duration)
 
             record_instance.adb_pull_records()
             mp4_files_found = self.get_file_in_dir('/tmp','*.mp4')
 
-            self.assertEqual('', mp4_files_found, 'the mp4 files under directory ')
+            self.assertEqual(filenames, mp4_files_found, 'cannot find mp4 files under directory')
 
 
 
