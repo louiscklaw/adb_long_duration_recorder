@@ -147,19 +147,28 @@ class Test_topic(unittest.TestCase):
 
         return ps_list
 
-    def assert_check_process_by_pid(self, pid):
+    def find_process_by_pid(self, pid):
+        '''to find a pid from os ps list
+
+        Return:
+            true if found, false if not found
+        '''
         process_list = self.test_list_process()
 
-        self.assertGreater(process_list.find(str(pid)), -1, 'cannot find the target process from host {}'.format(process_list))
+        process_found = process_list.find(str(pid)) > -1
+
+        return process_found
 
 
     def test_adb_start_record(self, duration=99, UDID=TestSetting.ANDROID_UDID, maximum_length=180):
         record_instance = self.test_create_instance(maximum_length=maximum_length)
         record_instance.adb_start_record(duration)
 
-        self.assertGreater(int(record_instance.record_pid), 1)
+        self.assertGreater(int(record_instance.record_pid), 1, 'the pid not valid')
 
-        self.assert_check_process_by_pid(record_instance.record_pid)
+        process_found = self.find_process_by_pid(record_instance.record_pid)
+
+        self.assertTrue(process_found, 'the record process not found {}'.format(record_instance.record_pid))
 
         # print(record_instance.record_files_android_path)
         # self.assertEqual('',dir(record_instance),'fail')
@@ -172,6 +181,37 @@ class Test_topic(unittest.TestCase):
         # result = subprocess.check_output(splitted_command)
 
         return record_instance
+
+    def test_send_popen_command(self, command='hostname'):
+        record_instance = self.test_create_instance()
+        # result = record_instance._send_host_command(command)
+        result = record_instance._send_popen_command(command)
+
+        # self.assertNotEqual((), result, 'the command not returning result')
+
+        return result
+
+    def te1st_send_host_command_killing_process(self):
+        NO_SUCH_PROCESS = 'No such process'
+        result = self.test_send_popen_command('ifconfig')
+
+        self.assertEqual('321', result,'debug test')
+        self.assertGreaterEqual(0,result.find(NO_SUCH_PROCESS), 'expected result not found')
+
+    def te1st_adb_kill_record(self):
+        record_instance= self.test_create_instance()
+
+        record_instance.adb_start_record()
+
+        process_found = self.find_process_by_pid(record_instance.record_pid)
+        self.assertTrue(process_found, 'the wanted record process not found {}'.format(record_instance.record_pid))
+
+        record_instance.adb_kill_record()
+        self.assertFalse(process_found, 'the record process still remains')
+
+
+
+
 
     def test_list_file_in_android(self):
         file_test_vector='test_vector.mp4'

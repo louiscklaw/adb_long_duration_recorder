@@ -99,6 +99,23 @@ class AdbLongDurationRecorder:
             if emitt_exception:
                 raise e
 
+    def _decode_command_output(self, binary_input):
+        if binary_input is not None:
+            return binary_input.decode('utf-8').strip()
+        else:
+            return binary_input
+
+    def _send_popen_command(self, command, command_timeout=1):
+        try:
+            splitted_command = shlex.split(command)
+            p = subprocess.Popen(splitted_command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            outs, errs = p.communicate(timeout=command_timeout)
+
+            return outs, errs
+        except Exception as e:
+            p.kill()
+            raise e
+
     def _get_record_filenames(self, repeat_times=1):
         return self.temp_record_filenames[0:repeat_times]
 
@@ -199,7 +216,7 @@ class AdbLongDurationRecorder:
     def _start_background_process(self, command):
         try:
             splitted_command = shlex.split(command)
-            p = subprocess.Popen(splitted_command)
+            p = subprocess.Popen(splitted_command, close_fds=True)
             return p.pid
         except Exception as e:
             raise e
@@ -226,17 +243,20 @@ class AdbLongDurationRecorder:
 
         return self
 
+    def threaded_adb_start(self):
+        pass
+
     def adb_kill_record(self):
         """to kill the recording"""
         logging.debug('kill recording')
 
         try:
-            pid = self.pid
-            kill_command = shlex.split(self._get_kill_record_command(pid))
-            self._send_host_command(kill_command)
+            pid = self.record_pid
+
 
         except Exception as e:
             logging.error(ErrorText.ERROR_KILLING_RECORDING)
+            logging.debug('dump value kill_command: {}'.format(kill_command))
             raise e
 
     def adb_pull_record(self, record_file_to_pull):
