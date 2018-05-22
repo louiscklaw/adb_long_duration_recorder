@@ -58,6 +58,7 @@ class ErrorText:
     ERROR_GETTING_PULL_SCREEN_RECORD_COMMAND='error getting pull screen record command'
     ERROR_SENDING_SUBPROCESS_COMMAND='error sending command using popen'
     ERROR_LISTING_PROCESS='error during list the process on host'
+    ERROR_KILLING_RECORDING='error duruing killing the recording process'
 
 class RunEnv:
     ADB_BIN_PATH=get_host_command_output('which adb')
@@ -231,10 +232,11 @@ class AdbLongDurationRecorder:
 
         try:
             pid = self.pid
-            command = shlex.split(self._get_kill_record_command(pid))
-            result = subprocess.check_output(command)
+            kill_command = shlex.split(self._get_kill_record_command(pid))
+            self._send_host_command(kill_command)
 
         except Exception as e:
+            logging.error(ErrorText.ERROR_KILLING_RECORDING)
             raise e
 
     def adb_pull_record(self, record_file_to_pull):

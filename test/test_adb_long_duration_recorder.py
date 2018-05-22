@@ -161,7 +161,6 @@ class Test_topic(unittest.TestCase):
 
         self.assert_check_process_by_pid(record_instance.record_pid)
 
-
         # print(record_instance.record_files_android_path)
         # self.assertEqual('',dir(record_instance),'fail')
 
