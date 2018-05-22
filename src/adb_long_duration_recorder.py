@@ -78,10 +78,11 @@ class AdbLongDurationRecorder:
         normal_exit=0
         error_exit=-1
 
-    def __init__(self, udid, android_store_dir='/sdcard', local_store_dir='/tmp'):
+    def __init__(self, udid, android_store_dir='/sdcard', local_store_dir='/tmp', maximum_length=180):
         self.udid = udid
         self.android_store_dir = android_store_dir
         self.local_store_dir = local_store_dir
+        self.maximum_length = maximum_length
 
     def _send_host_command(self, command):
         """accept string command, split it and feed to the subpeocess.check_output"""
@@ -100,34 +101,41 @@ class AdbLongDurationRecorder:
 
     def _get_adb_command_head(self):
         udid = self.udid
+
         adb_bin_path = RunEnv.ADB_BIN_PATH
+
         return '{} -s {}'.format(adb_bin_path, udid)
+
+    def _get_filename_in_android(self, repeat_times=1):
+        android_store_dir = self.android_store_dir
+        record_filenames = self._get_record_filenames(repeat_times)
+
+        record_files_android_path = ['{}/{}'.format(android_store_dir, record_filename) for record_filename in record_filenames]
+        return record_files_android_path
 
     def _get_start_record_command(self, repeat_times=1):
         # adb shell screenrecord /sdcard/example.mp4
         adb_command_head = self._get_adb_command_head()
         udid = self.udid
-        android_store_dir = self.android_store_dir
-        number_of_file = repeat_times
-        record_filenames = self._get_record_filenames(repeat_times)
-
-        record_files_android_path = ['{}/{}'.format(android_store_dir, record_filename) for record_filename in record_filenames]
+        record_files_android_path = self._get_filename_in_android(repeat_times)
 
         commands = ' & '.join(['{} shell screenrecord {}'.format(adb_command_head, record_file) for record_file in record_files_android_path])
 
         self.record_files_android_path = record_files_android_path
-
         return commands
 
     def _get_rm_record_command(self):
         adb_command_head = self._get_adb_command_head()
         android_store_dir = self.android_store_dir
+
         command = '{} rm {}'.format(adb_command_head, android_store_dir)
+
         return command
 
     def _get_record_pid_command(self):
         udid = self.udid
         command = 'ps -xa | grep -i adb | grep -v grep | grep -i screenrecord | grep {}'.format(udid)
+
         return command
 
     def _get_kill_record_command(self, pid):
@@ -139,6 +147,7 @@ class AdbLongDurationRecorder:
         local_store_dir = self.local_store_dir
 
         pull_command = '{} pull {} {}'.format(adb_command_head, file_on_android, local_store_dir)
+
         return pull_command
 
     def _lock_resource(self):
@@ -153,20 +162,30 @@ class AdbLongDurationRecorder:
         pid=result.split()[0]
         return pid
 
+    def _count_repeat(self, duration, max_number_output =999):
+        if duration == -1:
+            repeat = max_number_output
+        else:
+            int(math.ceil(duration / self.maximum_length))
+        return repeat
+
     def adb_start_record(self, duration=-1):
         """to start the recording
         Args:
             duration: the duration of recording , -1 for very long
         """
         try:
-            repeat = 999 if duration == -1 else int(math.ceil(duration / 180))
-
+            repeat = self._count_repeat(duration)
             command = self._get_start_record_command(repeat)
+
             splitted_command =  shlex.split(command)
             result = subprocess.Popen(splitted_command).decode('utf-8').strip()
-        except Exception as e:
 
+
+        except Exception as e:
             pass
+
+        return self
 
     def adb_kill_record(self):
         """to kill the recording"""
@@ -192,15 +211,15 @@ class AdbLongDurationRecorder:
         local_store_dir = self.local_store_dir
         record_files_android_paths = self.record_files_android_path
 
-        self.actual_record_pulled=[]
-        try:
-            for record_files_android_path in record_files_android_paths:
-                self.adb_pull_record(record_files_android_path)
-                self.actual_record_pulled.append(record_files_android_path)
+        # self.actual_record_pulled=[]
+        # try:
+        #     for record_files_android_path in record_files_android_paths:
+        #         self.adb_pull_record(record_files_android_path)
+        #         self.actual_record_pulled.append(record_files_android_path)
 
-        except Exception as e:
-            logging.error(ErrorText.ERROR_PULLING_SCREEN_RECORD)
-        return self
+        # except Exception as e:
+        #     logging.error(ErrorText.ERROR_PULLING_SCREEN_RECORD)
+        # return self
 
     def adb_rm_record(self):
         android_store_dir = self.android_store_dir

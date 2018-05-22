@@ -1,3 +1,3 @@
 call
 
-find . -name "*.py" |entr pytest
+find . -name "*.py" |entr pytest -v
