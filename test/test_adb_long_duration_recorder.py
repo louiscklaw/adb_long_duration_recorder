@@ -13,29 +13,19 @@ unittest documentation
 
 """
 
+import os
+import sys
 import unittest
 import pytest
 import time
+import subprocess
+import shlex
 
 from src.adb_long_duration_recorder import *
 
+
 class TestSettings():
     udid = 'VZHGLMA750201895'
-
-class StatusText(object):
-    """StatusText"""
-    TEST_TOPIC1 = 'test topic1'
-    SAMPLE_STATUS1 = '${sample status}1'
-    SAMPLE_STATUS2 = '${sample status}2'
-    SAMPLE_STATUS3 = '${sample status}3'
-
-
-class ErrorText(object):
-    """ErrorText"""
-    TEST_TOPIC1 = 'test topic1'
-    ERROR_STATUS1 = '${error text}1'
-    ERROR_STATUS2 = '${error text}2'
-    ERROR_STATUS3 = '${error text}3'
 
 
 def setUpModule():
@@ -58,36 +48,43 @@ class TestAdbLongDurationRecorder(unittest.TestCase):
 
     def setUp(self):
         print('setup (topic) test')
+        os.system('adb shell rm -rf /mnt/uiser/0/primary/*.mp4')
+        os.system('adb kill-server')
 
     def tearDown(self):
         print('teardown (topic) test')
 
-
     def test_helloworld(self, udid=TestSettings.udid):
         test_instance = AdbLongDurationRecorder(udid)
-        test_instance.helloworld()
 
-        return test_instance
+        test_instance.close_device()
 
-    @pytest.mark.wip
     def test_get_record_commands_single(self):
-        TEST_SET={
-            1: 'screenrecord --time-limit 1 /sdcard/screen0.mp4',
-            2: 'screenrecord --time-limit 1 /sdcard/screen0.mp4 & screenrecord --time-limit 1 /sdcard/screen1.mp4',
-            3: 'screenrecord --time-limit 1 /sdcard/screen0.mp4 & screenrecord --time-limit 1 /sdcard/screen1.mp4 & screenrecord --time-limit 1 /sdcard/screen2.mp4',
+        DUT_UDID = TestSettings.udid
+        TEST_SET = {
+            1: 'screenrecord --time-limit 1 /sdcard/screen_{UDID}_0.mp4'.format(UDID=DUT_UDID),
+            2: 'screenrecord --time-limit 1 /sdcard/screen_{UDID}_0.mp4 & screenrecord --time-limit 1 /sdcard/screen_{UDID}_1.mp4'.format(UDID=DUT_UDID),
+            3: 'screenrecord --time-limit 1 /sdcard/screen_{UDID}_0.mp4 & screenrecord --time-limit 1 /sdcard/screen_{UDID}_1.mp4 & screenrecord --time-limit 1 /sdcard/screen_{UDID}_2.mp4'.format(UDID=DUT_UDID),
         }
         for num_of_repeat, expected_commands in TEST_SET.items():
-            test_instance = self.test_helloworld()
-            test_command = test_instance._get_record_commands(1,num_of_repeat)
+            test_instance = AdbLongDurationRecorder(DUT_UDID)
+            test_command = test_instance._get_record_commands(1, num_of_repeat)
             self.assertEqual(expected_commands, test_command, 'the generated command is not correct {}'.format(test_command))
 
+    @pytest.mark.wip
     def test_use(self, duration=1):
-        test_instance = self.test_helloworld()
+        DUT_UDID = TestSettings.udid
+        test_instance = AdbLongDurationRecorder(DUT_UDID)
+
         test_instance.start_recording()
         time.sleep(duration)
         test_instance.stop_record()
-        test_instance.pull_record()
-        test_instance.rm_record()
+
+        list_mp4_files = test_instance.send_command_get_response('ls -l /mnt/user/0/primary/*.mp4')
+        self.assertGreater(list_mp4_files.find('screen_record_1.mp4'), 0)
+
+        # test_instance.pull_record()
+        # test_instance.rm_record()
 
 
 if __name__ == '__main__':
