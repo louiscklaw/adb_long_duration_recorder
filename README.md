@@ -8,8 +8,12 @@ find . -name "*.py" |entr pytest -v
 ### ubuntu
     apt install _swig_
 
-### python3
-    pip install adb3
+### to install python-usb from source(google)
+    cd python-adb
+    pipenv shell --three
+    pipenv shell
+    python //should be something like 3.x.x
+    python setup.py install
 
-### python2
-    pip install python-adb
+### start develop
+    ack -f --python | entr pipenv run pytest -v ./test -m wip

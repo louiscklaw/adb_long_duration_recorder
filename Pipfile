@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 pytest = "*"
+"adb3" = "*"
+adb = "*"
 
 [dev-packages]
 

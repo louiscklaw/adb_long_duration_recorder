@@ -20,7 +20,7 @@ def self_test():
 
     '''
     with lcd(CWD):
-        local('pipenv run pytest -v {}/test -m wip'.format(CWD))
+        local('pipenv run pytest   -v {}/test -m wip --fulltrace'.format(CWD))
 
 
 @task

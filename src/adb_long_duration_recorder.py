@@ -6,7 +6,10 @@ import sys
 import logging
 import traceback
 import threading
+import time
+
 from pprint import pprint
+
 
 from adb import adb_commands
 from adb import sign_m2crypto
@@ -68,7 +71,7 @@ class AdbLongDurationRecorder:
 
     def _get_rm_commands(self):
         filemask = AdbLongDurationRecorder.SCREEN_RECORD_FILENAME_TEMPLATE.replace('{}', '*')
-        file_location = '/'.join(self.android_tmp_path, filemask)
+        file_location = '/'.join([self.android_tmp_path, filemask])
         rm_command = 'rm -rf {}'.format(file_location)
         return rm_command
 
@@ -78,7 +81,9 @@ class AdbLongDurationRecorder:
         self.pc_tmp_path = pc_tmp_path
         self.record_fullpaths = self._get_record_file_fullpaths(max_filenum)
 
-        self.device = self.init_device()
+        self.device = self.device_connect()
+
+        self.device_mutex = threading.Lock()
 
         # # NOTE: initialize the tmp directory on android
         # self.rm_record()
@@ -90,13 +95,13 @@ class AdbLongDurationRecorder:
     def close_device(self):
         try:
             self.device.Close()
-        except expression as identifier:
+        except Exception as e:
             logging.error(self.ErrorTexts.ERROR_CLOSE_DEVICE)
 
     def helloworld(self):
         print('helloworld')
 
-    def init_device(self, adbkey_path='~/.android/adbkey'):
+    def device_connect(self, adbkey_path='~/.android/adbkey'):
         try:
             # KitKat+ devices require authentication
             signer = sign_m2crypto.M2CryptoSigner(op.expanduser(adbkey_path))
@@ -110,47 +115,94 @@ class AdbLongDurationRecorder:
             logging.error('cannot connect to android')
             raise e
 
-    def thread_record(self, max_record_duration=180):
-        count = 0
-        record_duration = 1
-        command_timeout = 180 * 1000
-        while record_duration > 0:
-            count += 1
-            record_commands = 'screenrecord --time-limit {} /sdcard/screen_record_{}.mp4'.format(record_duration, count)
-            device = self.init_device()
-            device.Shell(record_commands, timeout_ms=command_timeout)
+    def open_device_send_command(self, command, command_timeout=180):
+        try:
+            self.device_mutex.acquire()
+            device = self.device_connect()
+
+            # result = device.Shell(command, timeout_ms=command_timeout)
+            result = device.Shell(command)
             device.Close()
 
-    def start_recording(self, record_duration=180):
+            time.sleep(0.1)
+
+            self.device_mutex.release()
+
+            return result
+
+        except Exception as e:
+            logging.error('error sending command {}'.format(command))
+            raise e
+
+    def thread_record(self, wanted_duration, max_record_duration=180):
+        self.record_idx = 0
+        record_duration = 0
+        command_timeout = 180 * 1000
+
+        _, android_file_fullpaths = self.record_fullpaths
+
+        while record_duration < wanted_duration:
+            duration_diff = wanted_duration - record_duration
+            duration = min(max_record_duration, duration_diff)
+            record_duration = record_duration + duration
+
+            record_commands = 'screenrecord --time-limit {} {}'.format(duration, android_file_fullpaths[self.record_idx])
+
+            # print(record_commands)
+            self.open_device_send_command(record_commands, command_timeout)
+            self.record_idx += 1
+
+    def start_recording(self, record_duration=180, max_record_duration=180):
         logging.debug('start recording ')
         # record_commands = self._get_record_commands(record_duration=record_duration)
         # print(record_commands)
-        t = threading.Thread(target=self.thread_record, args=(record_duration,))
+        t = threading.Thread(target=self.thread_record, args=(record_duration, max_record_duration,))
         t.start()
 
     def stop_record(self):
         logging.debug('stop recording')
         try:
-            stop_device = self.init_device()
             kill_command = self._get_kill_command()
             # self.device.Shell(kill_command)
-            stop_device.Shell(kill_command)
-            stop_device.Close()
+            self.open_device_send_command(kill_command)
+
         except Exception as e:
             logging.error(AdbLongDurationRecorder.ErrorTexts.ERROR_STOP_RECORDING)
+            raise e
+
+    def write_binary_file(self, binary_stream, filepath):
+        f = open(filepath, 'wb')
+        f.write(binary_stream)
+        f.close()
+
+    def pull_single_record(self, android_file, pc_file):
+        COMMAND_TIMEOUT = 3 * 1000
+        try:
+            device = self.device_connect()
+            screencapture = device.Pull(android_file)
+            self.write_binary_file(screencapture, pc_file)
+            device.Close()
+
+        except Exception as e:
+            logging.error('error pulling file {}'.format(android_file))
+
             raise e
 
     def pull_record(self, path_to_save='/tmp'):
         logging.debug('pull record')
         try:
             pc_file_fullpaths, android_file_fullpaths = self.record_fullpaths
-            for i in range(0, len(android_file_fullpaths)):
-                device = self.init_device()
-                screencapture = device.Pull(android_file_fullpaths[i])
-                f = open(pc_file_fullpaths[i], 'wb')
-                f.write(screencapture)
-                f.close()
-                device.Close()
+
+            print(self.record_idx)
+
+            for i in range(0, self.record_idx + 1):
+                android_file_fullpath = android_file_fullpaths[i]
+                pc_file_fullpath = pc_file_fullpaths[i]
+
+                self.pull_single_record(android_file_fullpath, pc_file_fullpath)
+                #
+                print(pc_file_fullpath)
+
         except Exception as e:
             logging.error(AdbLongDurationRecorder.ErrorTexts.ERROR_PULL_RECORDING)
             raise e
@@ -159,18 +211,25 @@ class AdbLongDurationRecorder:
         logging.debug('rm_record')
         try:
             rm_command = self._get_rm_commands()
-            print(rm_command)
-            self.device.Shell(rm_command)
+            self.open_device_send_command(rm_command)
 
         except Exception as e:
             logging.error(self.ErrorTexts.ERROR_REMOVE_RECORDING)
+            print(rm_command)
             raise e
 
     def get_hostname(self):
         return self.device.Shell('hostname')
 
+    def try_sleep(self, seconds_s):
+        SLEEP_COMMAND = 'sleep {}'.format(seconds_s)
+        try:
+            print(self.open_device_send_command(SLEEP_COMMAND))
+        except Exception as e:
+            raise e
+
     def send_command_get_response(self, command):
-        device = self.init_device()
+        device = self.device_connect()
         result = device.Shell(command)
         device.Close()
         return result
