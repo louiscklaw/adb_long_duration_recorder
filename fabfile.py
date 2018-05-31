@@ -27,3 +27,20 @@ def self_test():
 def mon_and_test():
     with lcd(CWD):
         local('ack -f --python | entr fab self_test')
+
+
+@task
+def helloworld():
+    print('helloworld')
+
+
+@task
+@hosts('localhost')
+def init_fabric_mon_and_test():
+    # local('mkdir -p /tmp/{local,remote}')
+    WORK_DIR = ['/tmp/local', '/tmp/remote']
+    rsync_project(
+        local_dir=WORK_DIR[0], remote_dir=WORK_DIR[1],
+        delete=True, extra_opts='-azhWu')
+    # -u Do Not Overwrite the Modified Files at the Destination
+    local('ack -f --python | entr fab helloworld')

@@ -17,3 +17,10 @@ find . -name "*.py" |entr pytest -v
 
 ### start develop
     ack -f --python | entr pipenv run pytest -v ./test -m wip
+
+
+### command tried seems ok
+adb shell "echo \$\$; sleep 999"
+will return a pid of that shell
+
+adb kill <pid_of_that_shell>
