@@ -17,7 +17,34 @@ from device import *
 import os.path as op
 
 
-class AdbLongDurationRecorder:
+class ffmpeg_util(object):
+
+    def helloworld():
+        print('helloworld')
+
+    def __init__(self, udid, tmp_dir='/tmp'):
+        self.android_udid = udid
+        self.tmp_dir = tmp_dir
+
+        self.tmp_concat_filename = '{}_concat.txt'.format(self.android_udid)
+        self.tmp_concat_filepath = os.path.join(self.tmp_dir, self.tmp_concat_filename)
+
+    def _create_mp4_combine_text_file(self, files_to_combine, txt_file_path='/tmp/concat.txt'):
+        file_content = '\n'.join(["file '{}'".format(filepath) for filepath in files_to_combine])
+        with open(txt_file_path, 'w') as f:
+            f.write(file_content)
+
+    def run_combine(self, files_to_combine, save_to_mp4_file):
+        CONCAT_COMMAND = 'ffmpeg -y -f concat -safe 0 -i {} -c copy {}'.format(self.tmp_concat_filepath, save_to_mp4_file)
+        splitted_command = shlex.split(CONCAT_COMMAND)
+
+        self._create_mp4_combine_text_file(files_to_combine, self.tmp_concat_filepath)
+
+        return subprocess.check_output(splitted_command)
+
+
+
+class AdbLongDurationRecorder(ffmpeg_util):
     SCREEN_RECORD_FILENAME_TEMPLATE = '{}_screenrecord_{}.mp4'
 
     class ExitNum:
@@ -39,13 +66,15 @@ class AdbLongDurationRecorder:
         def __init__(self, udid):
             logging.error(AdbLongDurationRecorder.ErrorTexts.ERROR_CANNOT_CONNECT_TO_ANDROID)
 
-    def __init__(self, udid, tmp_dir = '/tmp'):
+    def __init__(self, udid, tmp_dir='/tmp'):
         self.android_udid = udid
         self.total_record_count = 0
         self.DEFAULT_RECORD_BITRATE = 2000000
         self.android_record_filepaths = []
         self.stop_thread_recording = False
         self.tmp_dir = tmp_dir
+
+        super(AdbLongDurationRecorder, self).__init__(udid, tmp_dir)
 
     def _get_mp4_filename(self, number_of_repeat=0):
         return [self.SCREEN_RECORD_FILENAME_TEMPLATE.format(self.android_udid, index) for index in range(0, number_of_repeat + 1)]
@@ -57,11 +86,6 @@ class AdbLongDurationRecorder:
 
     def _get_record_command(self, bitrate, duration_s, file_name):
         return 'screenrecord --bit-rate {} --time-limit {} {}'.format(bitrate, duration_s, file_name)
-
-    def _create_mp4_combine_text_file(self, files_to_combine, txt_file_path='/tmp/concat.txt'):
-        file_content = '\n'.join(["file '{}'".format(filepath) for filepath in files_to_combine])
-        with open(txt_file_path, 'w') as f:
-            f.write(file_content)
 
     def try_thread_recording(self, UDID, record_repeat=999, length_per_recording=180):
         ANDROID_TMP_DIR = '/sdcard'
@@ -98,24 +122,28 @@ class AdbLongDurationRecorder:
     def pull_all_record(self, save_to_dir='/tmp'):
         UDID = self.android_udid
         android_record_files = self.android_record_filepaths
-        pc_record_files = ['{}/{}'.format(save_to_dir,os.path.basename(android_record_file)) for android_record_file in android_record_files]
+        pc_record_files = ['{}/{}'.format(save_to_dir, os.path.basename(android_record_file)) for android_record_file in android_record_files]
 
         for android_record_file, pc_record_file in zip(android_record_files, pc_record_files):
             get_device(UDID).pull(android_record_file, pc_record_file)
 
-        logging.debug('pulling done')
+        self.pc_record_files = pc_record_files
 
-    def combine_files(self, files_to_combine, save_to_mp4_file):
+    def combine_files(self,  save_to_mp4_file, files_to_combine=''):
         """to combine the mp4 files
         command: ffmpeg -f concat -i concat.txt -c copy  test.mp4
         """
-        TMP_CONCAT_FILENAME = '{}_concat.txt'.format(self.android_udid)
-        TMP_CONCAT_FILEPATH = os.path.join(self.tmp_dir, TMP_CONCAT_FILENAME)
+        # TMP_CONCAT_FILENAME = '{}_concat.txt'.format(self.android_udid)
+        # TMP_CONCAT_FILEPATH = os.path.join(self.tmp_dir, TMP_CONCAT_FILENAME)
 
-        CONCAT_COMMAND = 'ffmpeg -y -f concat -i {} -c copy {}'.format(TMP_CONCAT_FILEPATH, save_to_mp4_file)
-        splitted_command = shlex.split(CONCAT_COMMAND)
+        # CONCAT_COMMAND = 'ffmpeg -y -f concat -i {} -c copy {}'.format(TMP_CONCAT_FILEPATH, save_to_mp4_file)
+        # splitted_command = shlex.split(CONCAT_COMMAND)
 
-        self._create_mp4_combine_text_file(files_to_combine, TMP_CONCAT_FILEPATH)
+        # self._create_mp4_combine_text_file(files_to_combine, TMP_CONCAT_FILEPATH)
 
-        return subprocess.check_output(splitted_command)
+        # return subprocess.check_output(splitted_command)
+        if files_to_combine =='':
+            self.run_combine(self.pc_record_files, save_to_mp4_file)
 
+        else:
+            self.run_combine(files_to_combine, save_to_mp4_file)
