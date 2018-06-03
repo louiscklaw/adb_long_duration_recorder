@@ -20,8 +20,6 @@ import os.path as op
 class AdbLongDurationRecorder:
     SCREEN_RECORD_FILENAME_TEMPLATE = 'screen_{}_{}.mp4'
 
-
-
     class ExitNum:
         EXIT_NORMAL = 0
         EXIT_ERROR = -1
@@ -45,40 +43,43 @@ class AdbLongDurationRecorder:
         self.android_udid = udid
         self.total_record_count = 0
         self.DEFAULT_RECORD_BITRATE = 2000000
-        self.android_record_filepaths=[]
+        self.android_record_filepaths = []
+        self.stop_thread_recording = False
 
-    def _get_record_string(self, duration=180, android_tmp_dir='/sdcard', num_of_repeat=5):
+    def _get_record_string(self, duration=1, android_tmp_dir='/sdcard', num_of_repeat=5):
         record_files = [os.path.join(android_tmp_dir, 'screenrecor{}.mp4'.format(file_num)) for file_num in
                         range(0, num_of_repeat)]
-        return ['screenrecord --time-limit 1 {}'.format(file_name) for file_name in record_files]
+        return ['screenrecord --time-limit {} {}'.format(duration, file_name) for file_name in record_files]
 
-    def try_thread_recording(self, UDID, record_repeat=999, length_per_recording=180 ):
+    def try_thread_recording(self, UDID, record_repeat=999, length_per_recording=180):
         ANDROID_TMP_DIR = '/sdcard'
 
-        record_filenames=['{}_screenrecord_{}.mp4'.format(self.android_udid, file_no) for file_no in range(0,record_repeat+1)]
+        record_filenames = ['{}_screenrecord_{}.mp4'.format(self.android_udid, file_no) for file_no in range(0, record_repeat + 1)]
         record_fullpaths = [os.path.join(ANDROID_TMP_DIR, record_filename) for record_filename in record_filenames]
 
         for android_record_fullpath in record_fullpaths:
-            self.total_record_count+=1
-            self.android_record_filepaths.append(android_record_fullpath)
+            if not self.stop_thread_recording:
+                self.total_record_count += 1
+                self.android_record_filepaths.append(android_record_fullpath)
 
-            p = get_device(UDID).shell(
-                ['screenrecord --bit-rate {} --time-limit {} {}'.format(
-                    self.DEFAULT_RECORD_BITRATE, length_per_recording, android_record_fullpath)
-                ])
+                p = get_device(UDID).shell(
+                    ['screenrecord --bit-rate {} --time-limit {} {}'.format(
+                        self.DEFAULT_RECORD_BITRATE, length_per_recording, android_record_fullpath)
+                     ])
 
-            print('the record section done for {}'.format(android_record_fullpath))
+                print('the record section done for {}'.format(android_record_fullpath))
 
     def stop_record(self):
         print('stop record called')
         UDID = self.android_udid
+        self.stop_thread_recording = True
         get_device(UDID).shell(['killall -2 screenrecord'])
         time.sleep(1)
 
-    def start_recording(self):
+    def start_recording(self, duration=999, split_s=180):
         UDID = self.android_udid
 
-        t = threading.Thread(target=self.try_thread_recording, args=(UDID, 9,3, ))
+        t = threading.Thread(target=self.try_thread_recording, args=(UDID, duration, split_s, ))
         t.start()
 
         self.record_thread = t
@@ -91,3 +92,8 @@ class AdbLongDurationRecorder:
             get_device(UDID).pull(android_record_file, save_to_dir)
 
         logging.debug('pulling done')
+
+    def combine_files(self):
+        print('combine_files')
+
+        pass

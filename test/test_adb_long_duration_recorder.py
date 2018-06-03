@@ -61,3 +61,4 @@ class TestAdbLongDurationRecorder(unittest.TestCase):
 
         self.test_instance_1.stop_record()
         self.test_instance_1.pull_record()
+        # self.test_instance_1.combine_files()
