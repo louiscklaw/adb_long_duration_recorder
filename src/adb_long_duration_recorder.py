@@ -86,7 +86,7 @@ class AdbLongDurationRecorder:
 
         self.record_thread = t
 
-    def pull_record(self, save_to_dir='/tmp'):
+    def pull_all_record(self, save_to_dir='/tmp'):
         UDID = self.android_udid
         android_record_files = self.android_record_filepaths
 

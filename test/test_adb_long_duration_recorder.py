@@ -55,6 +55,10 @@ class TestAdbLongDurationRecorder(unittest.TestCase):
     #     test_instance = AdbLongDurationRecorder(udid)
     #     test_instance.close_device()
 
+    def get_media_info(self, filepath):
+        result = subprocess.check_output(shlex.split('ffprobe {}'.format(filepath))).decode('utf-8')
+        return result
+
     def test_get_command(self):
         DUT_UDID = TestSettings.udid
         self.test_instance_1 = AdbLongDurationRecorder(DUT_UDID)
@@ -62,13 +66,20 @@ class TestAdbLongDurationRecorder(unittest.TestCase):
         commands = self.test_instance_1._get_record_command('bitrate', 'duration_s', 'file_name')
         self.assertEqual('screenrecord --bit-rate bitrate --time-limit duration_s file_name', commands, 'get_command is wrong')
 
-    def test_use_sample(self):
+    def test_use_sample(self, test_duration=10):
         DUT_UDID = TestSettings.udid
         self.test_instance_1 = AdbLongDurationRecorder(DUT_UDID)
 
-        self.test_instance_1.start_recording(20, 3)
-        time.sleep(10)
+        self.test_instance_1.start_recording()
+        time.sleep(test_duration)
 
         self.test_instance_1.stop_record()
-        self.test_instance_1.pull_record()
+        self.test_instance_1.pull_all_record()
         # self.test_instance_1.combine_files()
+
+        media_info_result = self.get_media_info('/tmp/VZHGLMA750201895_screenrecord_0.mp4')
+        expected_durations = ['Duration: 00:00:{}'.format(test_duration + i) for i in range(-2, 2 + 1)]
+        media_duration_is_correct = any(
+            [media_info_result.find(expected_duration) for expected_duration in expected_durations]
+        )
+        self.assertTrue(media_duration_is_correct, 'media duration is wrong')
