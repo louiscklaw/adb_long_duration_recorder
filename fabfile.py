@@ -19,8 +19,12 @@ def self_test():
     find . -name "*.py" |entr fab self_test
 
     '''
+
+    # TEST_COMMANDS = 'pipenv run pytest   -v {}/test -m wip --fulltrace'.format(CWD)
+    TEST_COMMANDS = 'pipenv run pytest -v {}/test --fulltrace'.format(CWD)
+
     with lcd(CWD):
-        local('pipenv run pytest   -v {}/test -m wip --fulltrace'.format(CWD))
+        local(TEST_COMMANDS)
 
 
 @task
